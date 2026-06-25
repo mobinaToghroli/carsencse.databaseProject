@@ -20,6 +20,7 @@ export default function UserProfile() {
     setError('');
     setSaving(true);
 
+    // ✅ updateUser الان async هست و به بکند می‌رود
     const ok = await updateUser({
       full_name: formData.full_name.trim(),
       phone: formData.phone.trim() || undefined,
@@ -48,7 +49,8 @@ export default function UserProfile() {
             {/* آواتار */}
             <div className="mb-8 flex items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#3B82F6] to-[#06B6D4] text-2xl font-bold text-white shadow-lg shadow-[#3B82F6]/20">
-                {(currentUser?.full_name || '؟').charAt(0)}
+                {/* ✅ full_name به جای fullName */}
+                {(currentUser?.full_name || '?').charAt(0)}
               </div>
               <div>
                 <h2 className="text-lg font-bold text-white">{currentUser?.full_name || 'کاربر'}</h2>
@@ -66,7 +68,7 @@ export default function UserProfile() {
                   type="text"
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full rounded-lg border border-[#0F172A] bg-[#0F172A] px-4 py-2.5 text-sm text-white focus:border-[#3B82F6] focus:outline-none"
+                  className="w-full rounded-lg border border-[#0F172A] bg-[#0F172A] px-4 py-2.5 text-sm text-white transition-colors focus:border-[#3B82F6] focus:outline-none"
                   required
                 />
               </div>
@@ -91,16 +93,15 @@ export default function UserProfile() {
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="09xxxxxxxxx"
-                  className="w-full rounded-lg border border-[#0F172A] bg-[#0F172A] px-4 py-2.5 text-sm text-white placeholder:text-[#94A3B8] focus:border-[#3B82F6] focus:outline-none"
                   dir="ltr"
+                  className="w-full rounded-lg border border-[#0F172A] bg-[#0F172A] px-4 py-2.5 text-sm text-white placeholder:text-[#94A3B8] transition-colors focus:border-[#3B82F6] focus:outline-none"
                 />
               </div>
 
               {/* پیام موفقیت */}
               {saved && (
                 <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-400">
-                  <CheckCircle className="h-4 w-4 flex-shrink-0" />
-                  اطلاعات با موفقیت ذخیره شد
+                  <CheckCircle className="h-4 w-4 flex-shrink-0" />اطلاعات با موفقیت ذخیره شد
                 </div>
               )}
 
@@ -122,7 +123,7 @@ export default function UserProfile() {
             </form>
           </div>
 
-          {/* کامپوننت تغییر رمز */}
+          {/* تغییر رمز عبور */}
           <ChangePassword />
         </div>
       </div>

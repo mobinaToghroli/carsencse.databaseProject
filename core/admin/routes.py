@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from core.database import get_db
 from auth.jwt_auth import require_admin
 from users.models import UserModel
@@ -12,6 +12,7 @@ from reports.schemas import IssueReportOutSchema
 from users.schemas import UserOutSchema
 from typing import List, Optional
 from pydantic import BaseModel
+from reviews.models import ReviewModel
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -27,7 +28,11 @@ async def pending_mechanics(
     db: Session = Depends(get_db),
     _ = Depends(require_admin),
 ):
-    return db.query(MechanicModel).filter_by(is_verified=False).all()
+    mechanics = db.query(MechanicModel).options(
+        joinedload(MechanicModel.user),
+        joinedload(MechanicModel.specializations),
+    ).filter_by(is_verified=False).all()
+    return mechanics
 
 
 @router.post("/mechanics/{mechanic_id}/verify")
@@ -86,16 +91,77 @@ async def deactivate_user(
 
 
 # ─── مدیریت درخواست‌ها ───────────────────────────────────────────────────────
-@router.get("/reports", response_model=List[IssueReportOutSchema])
+@router.get("/reports")
 async def all_reports(
     status: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _ = Depends(require_admin),
 ):
-    query = db.query(IssueReportModel)
+    query = db.query(IssueReportModel).options(
+        joinedload(IssueReportModel.user),
+        joinedload(IssueReportModel.vehicle),
+        joinedload(IssueReportModel.assigned_mechanic).joinedload(MechanicModel.user),
+        joinedload(IssueReportModel.attachments),
+    )
     if status:
         query = query.filter(IssueReportModel.status == status)
-    return query.order_by(IssueReportModel.created_at.desc()).all()
+    
+    reports = query.order_by(IssueReportModel.created_at.desc()).all()
+    
+    result = []
+    for report in reports:
+        # ─── اطلاعات کاربر ──────────────────────────────────────────────
+        client_name = report.user.full_name if report.user else ""
+        phone = report.user.phone if report.user else None
+        
+        # ─── اطلاعات خودرو ──────────────────────────────────────────────
+        vehicle_model = ""
+        plate_number = None
+        if report.vehicle:
+            vehicle_model = f"{report.vehicle.brand} {report.vehicle.model}"
+            plate_number = report.vehicle.plate
+        
+        # ─── نام مکانیک ──────────────────────────────────────────────────
+        mechanic_name = None
+        if report.assigned_mechanic and report.assigned_mechanic.user:
+            mechanic_name = report.assigned_mechanic.user.full_name
+        
+        # ─── گرفتن attachments ──────────────────────────────────────────
+        images = []
+        audio_files = []
+        for att in report.attachments:
+            if att.file_type == "image":
+                images.append(att.file_path)
+            elif att.file_type == "audio":
+                audio_files.append(att.file_path)
+        
+        result.append({
+            "id": report.id,
+            "tracking_code": report.tracking_code,
+            "description": report.description,
+            "status": report.status,
+            "admin_status": report.admin_status,
+            "priority": report.priority,
+            "created_at": report.created_at,
+            "user": {
+                "full_name": client_name,
+                "phone": phone,
+            },
+            "vehicle": {
+                "brand": report.vehicle.brand if report.vehicle else None,
+                "model": report.vehicle.model if report.vehicle else None,
+                "plate": plate_number,
+            },
+            "assigned_mechanic": {
+                "user": {
+                    "full_name": mechanic_name,
+                }
+            } if report.assigned_mechanic else None,
+            "images": images,
+            "audio_files": audio_files,
+        })
+    
+    return result
 
 
 # ─── آمار داشبورد ─────────────────────────────────────────────────────────────
@@ -104,6 +170,11 @@ async def dashboard_stats(
     db: Session = Depends(get_db),
     _ = Depends(require_admin),
 ):
+    total_ratings = db.query(ReviewModel).count()
+    verified_reports = db.query(IssueReportModel).filter(
+        IssueReportModel.status.in_(["completed", "waiting_for_visit"])
+    ).count()
+    
     return {
         "total_users": db.query(UserModel).filter_by(role="user").count(),
         "total_mechanics": db.query(MechanicModel).count(),
@@ -112,6 +183,8 @@ async def dashboard_stats(
         "total_reports": db.query(IssueReportModel).count(),
         "pending_reports": db.query(IssueReportModel).filter_by(status="pending").count(),
         "completed_reports": db.query(IssueReportModel).filter_by(status="completed").count(),
+        "verified_reports": verified_reports,
+        "total_ratings": total_ratings,
     }
 
 

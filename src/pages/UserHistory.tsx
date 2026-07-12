@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useApp, BackendReport } from '../contexts/AppContext';
+import { useApp } from '../contexts/AppContext';
+import { BackendReport } from '../api';
 import { Layout } from '../components/Layout';
-import { Eye, Search, Star, X } from 'lucide-react';
+import { Eye, Search, Star, X, MessageCircle } from 'lucide-react';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'در انتظار',
@@ -28,8 +29,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function UserHistory() {
-  // ✅ getMyReports، cancelReport، submitReview از بکند می‌آیند
-  const { getMyReports, cancelReport, submitReview } = useApp();
+  const { getMyReports, cancelReport, submitReview, getResponses } = useApp();
 
   const [reports, setReports] = useState<BackendReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +38,8 @@ export default function UserHistory() {
 
   // modal جزئیات
   const [selectedReport, setSelectedReport] = useState<BackendReport | null>(null);
+  const [responses, setResponses] = useState<any[]>([]);
+  const [loadingResponses, setLoadingResponses] = useState(false);
 
   // modal امتیاز
   const [rateReport, setRateReport] = useState<BackendReport | null>(null);
@@ -55,10 +57,24 @@ export default function UserHistory() {
 
   useEffect(() => { loadReports(); }, []);
 
+  // ─── باز کردن جزئیات ──────────────────────────────────────────────────────
+  const openDetails = async (report: BackendReport) => {
+    setSelectedReport(report);
+    setLoadingResponses(true);
+    try {
+      const res = await getResponses(report.id);
+      setResponses(res || []);
+    } catch (error) {
+      console.error('Error loading responses:', error);
+      setResponses([]);
+    } finally {
+      setLoadingResponses(false);
+    }
+  };
+
   // ─── لغو درخواست ──────────────────────────────────────────────────────────
   const handleCancel = async (id: number) => {
     if (!confirm('آیا از لغو این درخواست مطمئن هستید؟')) return;
-    // ✅ cancelReport به بکند می‌رود
     const ok = await cancelReport(id);
     if (ok) loadReports();
   };
@@ -67,7 +83,6 @@ export default function UserHistory() {
   const handleSubmitReview = async () => {
     if (!rateReport || rating === 0) return;
     setRateSubmitting(true);
-    // ✅ submitReview به بکند می‌رود
     const ok = await submitReview(rateReport.id, rating, rateComment || undefined);
     setRateSubmitting(false);
     if (ok) {
@@ -88,11 +103,9 @@ export default function UserHistory() {
     return matchSearch && matchStatus;
   });
 
-  // ✅ فقط درخواست‌های completed که مکانیک داشتند قابل امتیاز دادن هستند
   const canRate = (r: BackendReport) =>
     r.status === 'completed' && r.assigned_mechanic_id !== null;
 
-  // ✅ فقط pending یا assigned قابل لغو هستند
   const canCancel = (r: BackendReport) =>
     r.status === 'pending' || r.status === 'assigned';
 
@@ -161,12 +174,10 @@ export default function UserHistory() {
                   {filtered.map((req) => (
                     <tr key={req.id}
                       className="cursor-pointer transition-colors hover:bg-[#0F172A]"
-                      onClick={() => setSelectedReport(req)}>
-                      {/* ✅ شماره درخواست از بکند */}
+                      onClick={() => openDetails(req)}>
                       <td className="px-6 py-4">
                         <span className="font-mono text-sm font-bold text-[#3B82F6]">#{req.id}</span>
                       </td>
-                      {/* ✅ created_at به جای createdAt */}
                       <td className="px-6 py-4 text-sm text-[#94A3B8]">
                         {new Date(req.created_at).toLocaleDateString('fa-IR')}
                       </td>
@@ -178,25 +189,22 @@ export default function UserHistory() {
                         {CATEGORY_LABELS[req.category] || req.category}
                       </td>
                       <td className="px-6 py-4">
-                        {/* ✅ وضعیت‌های بکند به فارسی */}
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_COLOR[req.status] || 'bg-slate-500/10 text-slate-400'}`}>
                           {STATUS_LABELS[req.status] || req.status}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => setSelectedReport(req)}
+                          <button onClick={() => openDetails(req)}
                             className="flex items-center gap-1 rounded-lg bg-[#3B82F6]/10 px-3 py-1.5 text-xs font-medium text-[#3B82F6] hover:bg-[#3B82F6]/20">
                             <Eye className="h-3 w-3" />مشاهده
                           </button>
-                          {/* ✅ امتیاز — فقط وقتی completed باشد */}
                           {canRate(req) && (
                             <button onClick={() => { setRateReport(req); setRating(0); setRateComment(''); }}
                               className="flex items-center gap-1 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/30">
                               <Star className="h-3 w-3" />امتیاز
                             </button>
                           )}
-                          {/* ✅ لغو — فقط وقتی pending یا assigned باشد */}
                           {canCancel(req) && (
                             <button onClick={() => handleCancel(req.id)}
                               className="flex items-center gap-1 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20">
@@ -218,7 +226,7 @@ export default function UserHistory() {
       {selectedReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           onClick={() => setSelectedReport(null)}>
-          <div className="w-full max-w-lg rounded-2xl border border-[#1E293B] bg-[#1E293B] p-6 shadow-2xl"
+          <div className="w-full max-w-lg rounded-2xl border border-[#1E293B] bg-[#1E293B] p-6 shadow-2xl max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">جزئیات درخواست #{selectedReport.id}</h3>
@@ -255,7 +263,43 @@ export default function UserHistory() {
                 <p className="mb-1 text-xs text-[#94A3B8]">شرح مشکل</p>
                 <p className="leading-relaxed text-white">{selectedReport.description}</p>
               </div>
+
+              {/* ─── پاسخ‌های مکانیک ─── */}
+              <div className="mt-4">
+                <h4 className="flex items-center gap-2 text-sm font-bold text-white">
+                  <MessageCircle className="h-4 w-4 text-[#3B82F6]" />
+                  پاسخ‌های مکانیک
+                </h4>
+                {loadingResponses ? (
+                  <div className="flex justify-center py-4">
+                    <svg className="h-6 w-6 animate-spin text-[#3B82F6]" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  </div>
+                ) : responses.length === 0 ? (
+                  <p className="text-xs text-[#94A3B8] py-2">هنوز پاسخی ارسال نشده</p>
+                ) : (
+                  <div className="space-y-2 mt-2">
+                    {responses.map((r) => (
+                      <div key={r.id} className="bg-[#0F172A] p-3 rounded-lg">
+                        <p className="text-sm text-white">{r.message}</p>
+                        {r.estimated_cost && (
+                          <p className="text-xs text-[#3B82F6] mt-1">💰 {r.estimated_cost.toLocaleString('fa-IR')} تومان</p>
+                        )}
+                        {r.visit_date && (
+                          <p className="text-xs text-purple-400">📅 {r.visit_date}</p>
+                        )}
+                        <p className="text-xs text-[#94A3B8] mt-1">
+                          {new Date(r.created_at).toLocaleDateString('fa-IR')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
+
             {canCancel(selectedReport) && (
               <button onClick={() => { handleCancel(selectedReport.id); setSelectedReport(null); }}
                 className="mt-4 w-full rounded-lg bg-red-500/10 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-500/20">
@@ -278,7 +322,6 @@ export default function UserHistory() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {/* ستاره‌ها */}
             <div className="mb-4 flex justify-center gap-2">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button key={star} type="button" onClick={() => setRating(star)}>

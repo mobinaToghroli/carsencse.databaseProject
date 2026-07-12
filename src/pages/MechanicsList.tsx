@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Award, ChevronLeft, MapPin, Search, Star, Wrench } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useApp, BackendMechanic } from '../contexts/AppContext';
+import { useApp } from '../contexts/AppContext';
+import { BackendMechanic } from '../api';
 import { PublicHeader } from '../components/PublicHeader';
 
 export default function MechanicsList() {
@@ -14,6 +15,15 @@ export default function MechanicsList() {
   useEffect(() => {
     getMechanics().then(setMechanics).finally(() => setLoading(false));
   }, []);
+
+  // ─── تابع ساخت URL آواتار ──────────────────────────────────────────────────
+  const getAvatarUrl = (mechanic: BackendMechanic) => {
+    const avatar = mechanic.user?.avatar_url || (mechanic as any)?.avatar_url;
+    if (avatar) {
+      return `http://localhost:8000${avatar}`;
+    }
+    return null;
+  };
 
   const filtered = mechanics.filter((m) => {
     const text = `${m.full_name} ${m.city || ''} ${m.specializations.map((s) => s.name).join(' ')}`;
@@ -68,55 +78,67 @@ export default function MechanicsList() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {filtered.map((m) => (
-                  <Link key={m.id} to={`/mechanics/${m.id}`}
-                    className="group rounded-3xl border border-[#1E293B] bg-[#1E293B] p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[#3B82F6]/30 hover:shadow-xl hover:shadow-[#3B82F6]/5">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#3B82F6] to-[#06B6D4] text-2xl font-black text-white shadow-lg shadow-[#3B82F6]/20">
-                        {m.full_name.charAt(0)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="truncate text-lg font-black text-[#F8FAFC]">{m.full_name}</h3>
-                        <p className="mt-1 truncate text-sm text-[#3B82F6]">
-                          {m.specializations.map((s) => s.name).join(' · ') || 'تخصص ثبت نشده'}
-                        </p>
-                        {m.average_rating > 0 && (
-                          <div className="mt-2 flex items-center gap-1 text-xs text-amber-400">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} className={`h-3.5 w-3.5 ${i < Math.round(m.average_rating) ? 'fill-current' : ''}`} />
-                            ))}
-                            <span className="mr-1 text-[#94A3B8]">{m.average_rating.toFixed(1)}</span>
+                {filtered.map((m) => {
+                  const avatarUrl = getAvatarUrl(m);
+                  return (
+                    <Link key={m.id} to={`/mechanics/${m.id}`}
+                      className="group rounded-3xl border border-[#1E293B] bg-[#1E293B] p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[#3B82F6]/30 hover:shadow-xl hover:shadow-[#3B82F6]/5">
+                      <div className="flex items-start gap-4">
+                        {/* ─── آواتار ─── */}
+                        {avatarUrl ? (
+                          <img
+                            src={avatarUrl}
+                            alt={m.full_name}
+                            className="h-16 w-16 rounded-2xl object-cover border-2 border-[#3B82F6] flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#3B82F6] to-[#06B6D4] text-2xl font-black text-white shadow-lg shadow-[#3B82F6]/20">
+                            {m.full_name.charAt(0)}
                           </div>
                         )}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate text-lg font-black text-[#F8FAFC]">{m.full_name}</h3>
+                          <p className="mt-1 truncate text-sm text-[#3B82F6]">
+                            {m.specializations.map((s) => s.name).join(' · ') || 'تخصص ثبت نشده'}
+                          </p>
+                          {m.average_rating > 0 && (
+                            <div className="mt-2 flex items-center gap-1 text-xs text-amber-400">
+                              {[...Array(5)].map((_, i) => (
+                                <Star key={i} className={`h-3.5 w-3.5 ${i < Math.round(m.average_rating) ? 'fill-current' : ''}`} />
+                              ))}
+                              <span className="mr-1 text-[#94A3B8]">{m.average_rating.toFixed(1)}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="mt-5 space-y-2 text-sm text-[#94A3B8]">
-                      <p className="flex items-center gap-2">
-                        <Award className="h-4 w-4 text-[#3B82F6]" />
-                        {m.years_of_experience > 0 ? `${m.years_of_experience} سال تجربه` : 'سابقه کاری ثبت نشده'}
-                      </p>
-                      {m.city && (
+                      <div className="mt-5 space-y-2 text-sm text-[#94A3B8]">
                         <p className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-[#3B82F6]" />{m.city}
+                          <Award className="h-4 w-4 text-[#3B82F6]" />
+                          {m.years_of_experience > 0 ? `${m.years_of_experience} سال تجربه` : 'سابقه کاری ثبت نشده'}
                         </p>
-                      )}
-                      {m.total_completed > 0 && (
-                        <p className="flex items-center gap-2">
-                          <span className="h-4 w-4 text-center text-[#3B82F6]">✓</span>
-                          {m.total_completed} تعمیر تکمیل شده
-                        </p>
-                      )}
-                    </div>
+                        {m.city && (
+                          <p className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-[#3B82F6]" />{m.city}
+                          </p>
+                        )}
+                        {m.total_completed > 0 && (
+                          <p className="flex items-center gap-2">
+                            <span className="h-4 w-4 text-center text-[#3B82F6]">✓</span>
+                            {m.total_completed} تعمیر تکمیل شده
+                          </p>
+                        )}
+                      </div>
 
-                    <div className="mt-6 flex items-center justify-between border-t border-[#0F172A] pt-4">
-                      <span className="text-xs text-[#94A3B8]">پروفایل عمومی</span>
-                      <span className="flex items-center gap-1 text-sm font-bold text-[#3B82F6] transition-transform group-hover:-translate-x-1">
-                        مشاهده <ChevronLeft className="h-4 w-4" />
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+                      <div className="mt-6 flex items-center justify-between border-t border-[#0F172A] pt-4">
+                        <span className="text-xs text-[#94A3B8]">پروفایل عمومی</span>
+                        <span className="flex items-center gap-1 text-sm font-bold text-[#3B82F6] transition-transform group-hover:-translate-x-1">
+                          مشاهده <ChevronLeft className="h-4 w-4" />
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </div>

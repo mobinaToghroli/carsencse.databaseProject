@@ -38,6 +38,7 @@ export interface AppUser {
   phone: string | null;
   role: 'user' | 'mechanic' | 'admin';
   is_active: boolean;
+  avatar_url?: string | null;
 }
 
 interface AppContextType {
@@ -56,8 +57,9 @@ interface AppContextType {
     password: string;
     role: 'user' | 'mechanic';
   }) => Promise<boolean>;
-  updateUser: (data: { full_name?: string; email?: string; phone?: string }) => Promise<boolean>;
+  updateUser: (data: { full_name?: string; email?: string; phone?: string; avatar_url?: string }) => Promise<boolean>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<boolean>;
+  uploadAvatar: (file: File) => Promise<string | null>;
 
   // Vehicles
   getMyVehicles: () => Promise<BackendVehicle[]>;
@@ -69,13 +71,21 @@ interface AppContextType {
   getMyReports: (status?: string) => Promise<BackendReport[]>;
   getAvailableReports: (category?: string) => Promise<BackendReport[]>;
   getMyAssignedReports: (status?: string) => Promise<BackendReport[]>;
-  createReport: (data: { vehicle_id: number; title: string; description: string; category: string; priority?: string }) => Promise<BackendReport | null>;
+  createReport: (data: { 
+    vehicle_id: number; 
+    title: string; 
+    description: string; 
+    category: string; 
+    priority?: string;
+    mechanic_id?: number;
+  }) => Promise<BackendReport | null>;
   acceptReport: (id: number) => Promise<boolean>;
   updateReportStatus: (id: number, status: string) => Promise<boolean>;
   cancelReport: (id: number) => Promise<boolean>;
 
   // Attachments
   uploadAttachment: (reportId: number, file: File) => Promise<boolean>;
+  getAttachments: (reportId: number) => Promise<any[]>;
 
   // Responses
   getResponses: (reportId: number) => Promise<any[]>;
@@ -85,10 +95,21 @@ interface AppContextType {
   getMechanics: (params?: { city?: string; specialization?: string; min_rating?: number }) => Promise<BackendMechanic[]>;
   getMechanicPublic: (id: number) => Promise<BackendMechanic | null>;
   getMyMechanicProfile: () => Promise<BackendMechanic | null>;
-  updateMechanicProfile: (data: { bio?: string; city?: string; years_of_experience?: number; specialization_ids?: number[] }) => Promise<boolean>;
+  updateMechanicProfile: (data: { 
+    bio?: string; 
+    city?: string; 
+    years_of_experience?: number; 
+    specialization_ids?: number[];
+    workshop_name?: string;
+    address?: string;
+    national_id?: string;
+    phone?: string;
+    email?: string;
+  }) => Promise<boolean>;
 
   // Reviews
   submitReview: (reportId: number, rating: number, comment?: string) => Promise<boolean>;
+  getMechanicReviews: (mechanicId: number) => Promise<any[]>;
 
   // Notifications
   getNotifications: () => Promise<BackendNotification[]>;
@@ -104,6 +125,7 @@ interface AppContextType {
   getAllUsers: (role?: string) => Promise<BackendUser[]>;
   deactivateUser: (id: number) => Promise<boolean>;
   getAllReports: (status?: string) => Promise<BackendReport[]>;
+  getSpecializations: () => Promise<any[]>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -119,7 +141,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!token) { setLoading(false); return; }
 
     authAPI.getMe()
-      .then(({ data }) => setCurrentUser(data))
+      .then(({ data }) => {
+        setCurrentUser({
+          id: data.id,
+          full_name: data.full_name,
+          email: data.email,
+          phone: data.phone,
+          role: data.role,
+          is_active: data.is_active,
+          avatar_url: data.avatar_url,
+        });
+      })
       .catch(() => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -139,22 +171,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!currentUser) return;
     refreshNotificationCount();
-    const interval = setInterval(refreshNotificationCount, 30000); // هر ۳۰ ثانیه
+    const interval = setInterval(refreshNotificationCount, 30000);
     return () => clearInterval(interval);
   }, [currentUser, refreshNotificationCount]);
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
   const login = async (identifier: string, password: string, role: string): Promise<boolean> => {
     try {
+      console.log('🔑 1. Role sent to API:', role);
+      
       const data = await authAPI.login(identifier, password);
+      console.log('📡 2. Role received from API:', data.role);
+      console.log('📡 3. Full API response:', data);
+      
       if (data.role !== role) {
+        console.log('❌ 4. Role mismatch!', data.role, '!==', role);
         authAPI.logout();
+        setCurrentUser(null);
         return false;
       }
+      
       const { data: me } = await authAPI.getMe();
-      setCurrentUser(me);
+      console.log('👤 5. Current user from /me:', me);
+      setCurrentUser({
+        id: me.id,
+        full_name: me.full_name,
+        email: me.email,
+        phone: me.phone,
+        role: me.role,
+        is_active: me.is_active,
+        avatar_url: me.avatar_url,
+      });
       return true;
-    } catch {
+    } catch (error) {
+      console.error('❌ 6. Login error:', error);
       return false;
     }
   };
@@ -171,7 +221,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }): Promise<boolean> => {
     try {
       await authAPI.register(data);
-      // بعد از ثبت‌نام، login کن
       await login(data.email || data.phone || '', data.password, data.role);
       return true;
     } catch {
@@ -179,10 +228,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateUser = async (data: { full_name?: string; email?: string; phone?: string }): Promise<boolean> => {
+  const updateUser = async (data: { full_name?: string; email?: string; phone?: string; avatar_url?: string }): Promise<boolean> => {
     try {
       const { data: updated } = await authAPI.updateMe(data);
-      setCurrentUser(updated);
+      setCurrentUser(prev => ({
+        ...prev!,
+        full_name: updated.full_name || prev!.full_name,
+        email: updated.email ?? prev!.email,
+        phone: updated.phone ?? prev!.phone,
+        avatar_url: updated.avatar_url ?? prev!.avatar_url,
+      }));
       return true;
     } catch { return false; }
   };
@@ -192,6 +247,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await authAPI.changePassword(oldPassword, newPassword);
       return true;
     } catch { return false; }
+  };
+
+  // ─── آپلود آواتار ──────────────────────────────────────────────────────────
+  const uploadAvatar = async (file: File): Promise<string | null> => {
+    try {
+      const result = await authAPI.uploadAvatar(file);
+      
+      // ─── دریافت اطلاعات به‌روز شده کاربر ──────────────────────────────────
+      const { data: me } = await authAPI.getMe();
+      setCurrentUser({
+        id: me.id,
+        full_name: me.full_name,
+        email: me.email,
+        phone: me.phone,
+        role: me.role,
+        is_active: me.is_active,
+        avatar_url: me.avatar_url,
+      });
+      
+      return result.avatar_url;
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      return null;
+    }
   };
 
   // ─── Vehicles ─────────────────────────────────────────────────────────────
@@ -233,7 +312,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return data;
   };
 
-  const createReport = async (data: any): Promise<BackendReport | null> => {
+  const createReport = async (data: { 
+    vehicle_id: number; 
+    title: string; 
+    description: string; 
+    category: string; 
+    priority?: string;
+    mechanic_id?: number;
+  }): Promise<BackendReport | null> => {
     try {
       const res = await reportAPI.create(data);
       return res.data;
@@ -259,6 +345,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const uploadAttachment = async (reportId: number, file: File): Promise<boolean> => {
     try { await attachmentAPI.upload(reportId, file); return true; }
     catch { return false; }
+  };
+
+  const getAttachments = async (reportId: number): Promise<any[]> => {
+    try {
+      const { data } = await attachmentAPI.list(reportId);
+      return data;
+    } catch {
+      return [];
+    }
   };
 
   // ─── Responses ────────────────────────────────────────────────────────────
@@ -292,15 +387,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { return null; }
   };
 
-  const updateMechanicProfile = async (data: any): Promise<boolean> => {
-    try { await mechanicAPI.updateMyProfile(data); return true; }
-    catch { return false; }
+  const updateMechanicProfile = async (data: { 
+    bio?: string; 
+    city?: string; 
+    years_of_experience?: number; 
+    specialization_ids?: number[];
+    workshop_name?: string;
+    address?: string;
+    national_id?: string;
+    phone?: string;
+    email?: string;
+  }): Promise<boolean> => {
+    try { 
+      await mechanicAPI.updateMyProfile(data); 
+      return true; 
+    } catch { 
+      return false; 
+    }
   };
 
   // ─── Reviews ──────────────────────────────────────────────────────────────
   const submitReview = async (reportId: number, rating: number, comment?: string): Promise<boolean> => {
     try { await reviewAPI.submit(reportId, rating, comment); return true; }
     catch { return false; }
+  };
+
+  const getMechanicReviews = async (mechanicId: number): Promise<any[]> => {
+    try {
+      const { data } = await reviewAPI.mechanicReviews(mechanicId);
+      return data;
+    } catch {
+      return [];
+    }
   };
 
   // ─── Notifications ────────────────────────────────────────────────────────
@@ -355,6 +473,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return data;
   };
 
+  // ─── Specializations ──────────────────────────────────────────────────────
+  const getSpecializations = async (): Promise<any[]> => {
+    try {
+      const { data } = await adminAPI.listSpecializations();
+      return data;
+    } catch {
+      return [];
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0F172A]">
@@ -373,17 +501,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider
       value={{
         currentUser, loading, notificationCount,
-        login, logout, register, updateUser, changePassword,
+        login, logout, register, updateUser, changePassword, uploadAvatar,
         getMyVehicles, addVehicle, updateVehicle, deleteVehicle,
         getMyReports, getAvailableReports, getMyAssignedReports,
         createReport, acceptReport, updateReportStatus, cancelReport,
         uploadAttachment,
+        getAttachments,
         getResponses, sendResponse,
         getMechanics, getMechanicPublic, getMyMechanicProfile, updateMechanicProfile,
-        submitReview,
+        submitReview, getMechanicReviews,
         getNotifications, markNotificationRead, markAllNotificationsRead, refreshNotificationCount,
         getAdminStats, getPendingMechanics, verifyMechanic, revokeMechanic,
         getAllUsers, deactivateUser, getAllReports,
+        getSpecializations,
       }}
     >
       {children}

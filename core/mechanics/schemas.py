@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from users.schemas import UserOutSchema
 
 
 class SpecializationOutSchema(BaseModel):
@@ -15,6 +16,11 @@ class MechanicProfileUpdateSchema(BaseModel):
     city: Optional[str] = None
     years_of_experience: Optional[int] = None
     specialization_ids: Optional[List[int]] = None
+    workshop_name: Optional[str] = None
+    address: Optional[str] = None
+    national_id: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
 
 
 class MechanicOutSchema(BaseModel):
@@ -27,13 +33,16 @@ class MechanicOutSchema(BaseModel):
     is_verified: bool
     total_completed: int
     average_rating: float
-    specializations: List[SpecializationOutSchema] = []
+    specializations: List[SpecializationOutSchema] = []  # ← این مهمه
+    workshop_name: Optional[str] = None
+    address: Optional[str] = None
+    national_id: Optional[str] = None
+    user: Optional[UserOutSchema] = None
 
     model_config = {"from_attributes": True}
 
 
 class MechanicPublicSchema(BaseModel):
-    """پروفایل عمومی مکانیک — قابل مشاهده برای همه"""
     id: int
     full_name: str
     bio: Optional[str] = None
@@ -41,6 +50,9 @@ class MechanicPublicSchema(BaseModel):
     years_of_experience: int
     total_completed: int
     average_rating: float
-    specializations: List[SpecializationOutSchema] = []
+    specializations: List[SpecializationOutSchema] = []  # ← این مهمه
+    workshop_name: Optional[str] = None
+    address: Optional[str] = None
+    user: Optional[UserOutSchema] = None
 
     model_config = {"from_attributes": True}

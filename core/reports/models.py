@@ -1,8 +1,10 @@
-from sqlalchemy import Column, String, Integer, Enum, ForeignKey, DateTime, Text
+from sqlalchemy import Column, String, Integer, Enum, ForeignKey, DateTime, Text, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from core.database import Base
 import enum
+import secrets
+from datetime import datetime
 
 
 class IssueCategory(str, enum.Enum):
@@ -33,6 +35,13 @@ class IssueStatus(str, enum.Enum):
     cancelled = "cancelled"                      # لغو شد
 
 
+# ─── Enum جدید برای admin_status ────────────────────────────────────────────
+class AdminStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class IssueReportModel(Base):
     __tablename__ = "issue_reports"
 
@@ -46,6 +55,12 @@ class IssueReportModel(Base):
     category = Column(Enum(IssueCategory), nullable=False)
     priority = Column(Enum(IssuePriority), default=IssuePriority.normal)
     status = Column(Enum(IssueStatus), default=IssueStatus.pending)
+
+    # ─── فیلدهای جدید برای فرانت ───────────────────────────────────────────
+    admin_status = Column(Enum(AdminStatus), default=AdminStatus.pending)  # ← جدید
+    tracking_code = Column(String(50), unique=True, nullable=True)         # ← جدید
+    cost = Column(Float, nullable=True)                                    # ← جدید
+    mechanic_notes = Column(Text, nullable=True)                           # ← جدید
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -61,3 +76,13 @@ class IssueReportModel(Base):
     attachments = relationship("AttachmentModel", back_populates="report", cascade="all, delete-orphan")
     responses = relationship("ResponseModel", back_populates="report", cascade="all, delete-orphan")
     review = relationship("ReviewModel", back_populates="report", uselist=False)
+
+    # ─── متد تولید tracking_code ────────────────────────────────────────────
+    @staticmethod
+    def generate_tracking_code():
+        return f"CAR-{datetime.now().strftime('%Y%m')}-{secrets.token_hex(4).upper()}"
+
+    # ─── متد برای تنظیم tracking_code قبل از ذخیره ──────────────────────────
+    def set_tracking_code(self):
+        if not self.tracking_code:
+            self.tracking_code = self.generate_tracking_code()

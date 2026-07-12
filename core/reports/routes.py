@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 from core.database import get_db
 from auth.jwt_auth import get_authenticated_jwt_user, require_mechanic
 from users.models import UserModel
 from vehicles.models import VehicleModel
-from reports.models import IssueReportModel, IssueStatus, IssueCategory
+from reports.models import IssueReportModel, IssueStatus, IssueCategory, AdminStatus
 from reports.schemas import IssueReportCreateSchema, IssueReportOutSchema, IssueStatusUpdateSchema
 from mechanics.models import MechanicModel
 from notifications.service import notify
@@ -40,6 +40,21 @@ async def create_report(
         category=request.category,
         priority=request.priority,
     )
+    
+    # ─── اگر مکانیک مشخص شده، مستقیم assign کن ────────────────────────────
+    if request.mechanic_id:
+        mechanic = db.query(MechanicModel).filter_by(id=request.mechanic_id, is_verified=True).first()
+        if mechanic:
+            report.assigned_mechanic_id = mechanic.id
+            report.status = IssueStatus.assigned
+            # اطلاع‌رسانی به مکانیک
+            notify(db, mechanic.user_id, "درخواست جدید", 
+                   f"کاربر {current_user.full_name} درخواستی برای شما ثبت کرد", report_id=report.id)
+            print(f"✅ Report assigned to mechanic {mechanic.id} - {mechanic.full_name}")
+    
+    # ─── مقداردهی tracking_code ────────────────────────────────────────────
+    report.set_tracking_code()
+    
     db.add(report)
     db.commit()
     db.refresh(report)

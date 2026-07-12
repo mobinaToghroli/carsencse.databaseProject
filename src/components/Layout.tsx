@@ -28,6 +28,11 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const menuItems = isMechanic ? mechanicMenuItems : userMenuItems;
 
+  // ─── آواتار کاربر ──────────────────────────────────────────────────────────
+  const avatarUrl = currentUser?.avatar_url 
+    ? `http://localhost:8000${currentUser.avatar_url}` 
+    : null;
+
   return (
     <div className="flex min-h-screen bg-[#0F172A]" dir="rtl">
       <aside className="sticky top-0 flex h-screen w-64 flex-col border-l border-[#1E293B] bg-[#0F172A]">
@@ -60,11 +65,19 @@ export function Layout({ children }: { children: ReactNode }) {
         {currentUser && (
           <div className="border-t border-[#1E293B] p-4">
             <div className="mb-3 flex items-center gap-3 rounded-xl bg-[#1E293B] p-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#3B82F6] to-[#06B6D4] text-sm font-bold text-white">
-                {(currentUser.full_name || '?').charAt(0)}
-              </div>
+              {/* ─── آواتار ─── */}
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={currentUser.full_name}
+                  className="h-10 w-10 rounded-full object-cover border-2 border-[#3B82F6]"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#3B82F6] to-[#06B6D4] text-sm font-bold text-white">
+                  {(currentUser.full_name || '?').charAt(0)}
+                </div>
+              )}
               <div className="flex-1 overflow-hidden">
-                {/* ✅ full_name به جای fullName */}
                 <p className="truncate text-sm font-semibold text-[#F8FAFC]">{currentUser.full_name}</p>
                 <p className="truncate text-xs text-[#94A3B8]">{isMechanic ? 'مکانیک' : 'کاربر عادی'}</p>
               </div>

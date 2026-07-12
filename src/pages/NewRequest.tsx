@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useApp, BackendVehicle } from '../contexts/AppContext';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';  // ← useSearchParams اضافه شد
+import { useApp } from '../contexts/AppContext';
+import { BackendVehicle } from '../api';
 import { Layout } from '../components/Layout';
 import { CheckCircle, ArrowRight, X, Mic, ImagePlus, Car } from 'lucide-react';
 
@@ -20,6 +21,8 @@ const CATEGORIES = [
 export default function NewRequest() {
   const { createReport, getMyVehicles, uploadAttachment } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();  // ← اضافه شد
+  const mechanicIdParam = searchParams.get('mechanic_id');  // ← دریافت mechanic_id از URL
 
   // ─── خودروهای کاربر از بکند ───────────────────────────────────────────────
   const [vehicles, setVehicles] = useState<BackendVehicle[]>([]);
@@ -125,6 +128,7 @@ export default function NewRequest() {
       description: formData.issueDescription.trim(),
       category: formData.category,
       priority: formData.priority,
+      mechanic_id: mechanicIdParam ? parseInt(mechanicIdParam) : undefined,  // ← اضافه شد
     });
 
     if (!report) {
@@ -158,7 +162,7 @@ export default function NewRequest() {
             </div>
             <h2 className="text-xl font-bold text-white">درخواست با موفقیت ثبت شد</h2>
             <p className="mt-2 text-sm text-[#94A3B8]">
-              مکانیک‌های موجود می‌توانند درخواست شما را قبول کنند.
+              {mechanicIdParam ? 'درخواست شما مستقیماً به مکانیک مورد نظر ارسال شد.' : 'مکانیک‌های موجود می‌توانند درخواست شما را قبول کنند.'}
             </p>
             <p className="mt-1 text-sm text-[#94A3B8]">
               شماره درخواست:{' '}
@@ -190,7 +194,9 @@ export default function NewRequest() {
       <div className="p-6 lg:p-8">
         <div className="mb-6">
           <h1 className="text-2xl font-black text-white">ثبت خرابی جدید</h1>
-          <p className="mt-1 text-sm text-[#94A3B8]">اطلاعات خرابی خودروی خود را وارد کنید</p>
+          <p className="mt-1 text-sm text-[#94A3B8]">
+            {mechanicIdParam ? 'ثبت درخواست برای مکانیک انتخابی' : 'اطلاعات خرابی خودروی خود را وارد کنید'}
+          </p>
         </div>
 
         <div className="max-w-2xl rounded-2xl border border-[#1E293B] bg-[#1E293B] p-6 lg:p-8">

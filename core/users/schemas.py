@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from typing import Optional
 from users.models import UserRole
 from datetime import datetime
@@ -51,20 +51,22 @@ class UserRefreshTokenSchema(BaseModel):
 
 class UserOutSchema(BaseModel):
     id: int
-    full_name: str
+    fullName: str = Field(..., alias="full_name")
     email: Optional[str] = None
     phone: Optional[str] = None
     role: UserRole
-    is_active: bool
-    created_at: datetime
+    isActive: bool = Field(..., alias="is_active")
+    createdAt: datetime = Field(..., alias="created_at")
+    avatarUrl: Optional[str] = Field(None, alias="avatar_url")  # ← اضافه شد
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class UserUpdateSchema(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    avatar_url: Optional[str] = None  # ← اضافه شد
 
     @field_validator("phone")
     @classmethod

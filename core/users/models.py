@@ -24,6 +24,7 @@ class UserModel(Base):
     password = Column(String, nullable=False)
     role = Column(Enum(UserRole), default=UserRole.user, nullable=False)
     is_active = Column(Boolean, default=True)
+    avatar_url = Column(String(500), nullable=True)  # ← اضافه شد
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -39,7 +40,6 @@ class UserModel(Base):
     def hash_password(self, plain_password):
        plain_password = plain_password[:72]
        return pwd_context.hash(plain_password)
-
 
     def verify_password(self, plain_password: str) -> bool:
         return pwd_context.verify(plain_password, self.password)

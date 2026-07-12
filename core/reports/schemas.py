@@ -10,6 +10,7 @@ class IssueReportCreateSchema(BaseModel):
     description: str
     category: IssueCategory
     priority: IssuePriority = IssuePriority.normal
+    mechanic_id: Optional[int] = None  # ← اضافه شد
 
     @field_validator("description")
     @classmethod

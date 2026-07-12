@@ -58,6 +58,7 @@ export interface BackendUser {
   role: 'user' | 'mechanic' | 'admin';
   is_active: boolean;
   created_at: string;
+  avatar_url?: string | null;  // ← اضافه شد
 }
 
 export interface BackendVehicle {
@@ -97,6 +98,17 @@ export interface BackendMechanic {
   total_completed: number;
   average_rating: number;
   specializations: { id: number; name: string; slug: string }[];
+  
+  // ─── فیلدهای جدید برای اطلاعات کامل مکانیک ──────────────────────────────
+  workshop_name?: string | null;
+  address?: string | null;
+  national_id?: string | null;
+  user?: {
+    phone: string | null;
+    email: string | null;
+    full_name: string;
+    avatar_url?: string | null;  // ← اضافه شد
+  };
 }
 
 export interface BackendResponse {
@@ -158,12 +170,22 @@ export const authAPI = {
   getMe: () => api.get<BackendUser>('/auth/me'),
 
   /** ویرایش اطلاعات */
-  updateMe: (data: { full_name?: string; email?: string; phone?: string }) =>
+  updateMe: (data: { full_name?: string; email?: string; phone?: string; avatar_url?: string }) =>
     api.patch<BackendUser>('/auth/me', data),
 
   /** تغییر رمز */
   changePassword: (old_password: string, new_password: string) =>
     api.post('/auth/me/change-password', { old_password, new_password }),
+
+  /** آپلود آواتار */  // ← اضافه شد
+  uploadAvatar: async (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    const { data } = await api.post('/auth/me/upload-avatar', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data as { detail: string; avatar_url: string };
+  },
 };
 
 // ─── VEHICLES ─────────────────────────────────────────────────────────────────
@@ -210,6 +232,7 @@ export const reportAPI = {
     description: string;
     category: string;
     priority?: string;
+    mechanic_id?: number;
   }) => api.post<BackendReport>('/reports', data),
 
   /** جزئیات */
@@ -292,6 +315,11 @@ export const mechanicAPI = {
     city?: string;
     years_of_experience?: number;
     specialization_ids?: number[];
+    workshop_name?: string;
+    address?: string;
+    national_id?: string;
+    phone?: string;
+    email?: string;
   }) => api.patch<BackendMechanic>('/mechanics/me/profile', data),
 };
 

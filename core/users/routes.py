@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from core.database import get_db
+from core.config import settings
 from users.models import UserModel, UserRole
 from users.schemas import (
     UserRegisterSchema, UserLoginSchema, UserRefreshTokenSchema,
@@ -13,6 +14,9 @@ from auth.jwt_auth import (
     generate_access_token, generate_refresh_token,
     decode_refresh_token, get_authenticated_jwt_user,
 )
+import os
+import uuid
+import shutil
 
 router = APIRouter(prefix="/auth", tags=["Auth & Users"])
 
@@ -110,6 +114,55 @@ async def update_me(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+# ─── آپلود آواتار ────────────────────────────────────────────────────────────
+@router.post("/me/upload-avatar", status_code=200)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_authenticated_jwt_user),
+):
+    # ─── بررسی نوع فایل ──────────────────────────────────────────────────────
+    ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=400, 
+            detail="فرمت فایل پشتیبانی نمی‌شود. (jpg, png, webp, gif)"
+        )
+
+    # ─── بررسی حجم ──────────────────────────────────────────────────────────
+    MAX_SIZE = 2 * 1024 * 1024  # 2MB
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    file.file.seek(0)
+    if size > MAX_SIZE:
+        raise HTTPException(
+            status_code=400, 
+            detail="حجم فایل نباید بیشتر از ۲MB باشد"
+        )
+
+    # ─── ذخیره فایل ──────────────────────────────────────────────────────────
+    upload_dir = os.path.join(settings.UPLOAD_DIR, "avatars")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+    unique_name = f"avatar_{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
+    file_path = os.path.join(upload_dir, unique_name)
+
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # ─── ذخیره آدرس در دیتابیس ──────────────────────────────────────────────
+    avatar_url = f"/uploads/avatars/{unique_name}"
+    current_user.avatar_url = avatar_url
+    db.commit()
+    db.refresh(current_user)
+
+    return JSONResponse(content={
+        "detail": "آواتار با موفقیت آپلود شد",
+        "avatar_url": avatar_url
+    })
 
 
 # ─── تغییر رمز عبور ───────────────────────────────────────────────────────────

@@ -86,6 +86,7 @@ async def upload_attachment(
         "file_name": attachment.file_name,
         "file_type": attachment.file_type.value,
         "file_size": attachment.file_size,
+        "file_path": attachment.file_path,  # ← اضافه شد
     }, status_code=201)
 
 
@@ -110,8 +111,14 @@ async def list_attachments(
             raise HTTPException(status_code=403, detail="دسترسی ندارید")
 
     attachments = db.query(AttachmentModel).filter_by(report_id=report_id).all()
-    return [{"id": a.id, "file_name": a.file_name, "file_type": a.file_type.value,
-             "file_size": a.file_size, "created_at": str(a.created_at)} for a in attachments]
+    return [{
+        "id": a.id,
+        "file_name": a.file_name,
+        "file_path": a.file_path,  # ← اضافه شد
+        "file_type": a.file_type.value,
+        "file_size": a.file_size,
+        "created_at": str(a.created_at)
+    } for a in attachments]
 
 
 @router.delete("/{attachment_id}", status_code=204)

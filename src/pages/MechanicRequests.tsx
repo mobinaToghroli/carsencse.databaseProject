@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useApp, BackendReport } from '../contexts/AppContext';
+import { useApp } from '../contexts/AppContext';
+import { BackendReport } from '../api';
 import { Layout } from '../components/Layout';
-import { Search, UserCheck, Inbox, X, Send, DollarSign } from 'lucide-react';
+import { Search, UserCheck, Inbox, X, Send, DollarSign, Image, Mic, Download } from 'lucide-react';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'در انتظار', assigned: 'قبول شده', diagnosing: 'تشخیص',
@@ -28,7 +29,15 @@ const NEXT_STATUS: Record<string, { value: string; label: string }[]> = {
 };
 
 export default function MechanicRequests() {
-  const { getAvailableReports, getMyAssignedReports, acceptReport, updateReportStatus, getResponses, sendResponse } = useApp();
+  const { 
+    getAvailableReports, 
+    getMyAssignedReports, 
+    acceptReport, 
+    updateReportStatus, 
+    getResponses, 
+    sendResponse,
+    getAttachments
+  } = useApp();
 
   const [viewMode, setViewMode] = useState<'mine' | 'available'>('mine');
   const [assigned, setAssigned] = useState<BackendReport[]>([]);
@@ -37,9 +46,9 @@ export default function MechanicRequests() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // modal مدیریت درخواست
   const [selectedReport, setSelectedReport] = useState<BackendReport | null>(null);
   const [responses, setResponses] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [cost, setCost] = useState('');
   const [visitDate, setVisitDate] = useState('');
@@ -57,8 +66,18 @@ export default function MechanicRequests() {
 
   const openReport = async (r: BackendReport) => {
     setSelectedReport(r);
-    const res = await getResponses(r.id);
-    setResponses(res);
+    try {
+      const [res, atts] = await Promise.all([
+        getResponses(r.id),
+        getAttachments(r.id)
+      ]);
+      console.log('📎 Responses:', res);
+      console.log('📎 Attachments:', atts);
+      setResponses(res || []);
+      setAttachments(atts || []);
+    } catch (error) {
+      console.error('Error loading report details:', error);
+    }
   };
 
   const handleAccept = async (id: number) => {
@@ -84,7 +103,6 @@ export default function MechanicRequests() {
     setResponses(res);
     setNewMessage(''); setCost(''); setVisitDate('');
     setSending(false);
-    // اگر تاریخ مراجعه داد، وضعیت رو هم عوض کن
     if (visitDate && selectedReport.status === 'diagnosing') {
       await load();
     }
@@ -99,6 +117,18 @@ export default function MechanicRequests() {
     const matchStatus = statusFilter === 'all' || r.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  // ─── Helper برای ساخت URL صحیح ──────────────────────────────────────────
+  const getFileUrl = (filePath: string) => {
+    if (!filePath) return '';
+    if (filePath.startsWith('uploads/')) {
+      return `http://localhost:8000/${filePath}`;
+    }
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+      return filePath;
+    }
+    return `http://localhost:8000/uploads/${filePath}`;
+  };
 
   return (
     <Layout>
@@ -229,7 +259,7 @@ export default function MechanicRequests() {
             </div>
 
             <div className="space-y-5 p-5">
-              {/* اطلاعات درخواست */}
+              {/* ─── اطلاعات درخواست ─── */}
               <div className="rounded-xl bg-[#0F172A] p-4 text-sm space-y-2">
                 <div className="flex justify-between">
                   <span className="text-[#94A3B8]">دسته‌بندی</span>
@@ -253,7 +283,58 @@ export default function MechanicRequests() {
                 </div>
               </div>
 
-              {/* تغییر وضعیت */}
+              {/* ─── نمایش فایل‌های ضمیمه ─── */}
+              {attachments.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-bold text-white mb-3">📎 فایل‌های ضمیمه</h4>
+                  <div className="space-y-2">
+                    {attachments.map((att) => {
+                      const fileUrl = att.file_path ? getFileUrl(att.file_path) : '';
+                      if (!fileUrl) return null;
+                      
+                      return (
+                        <div key={att.id} className="flex items-center gap-3 bg-[#0F172A] p-3 rounded-lg">
+                          {att.file_type === 'image' ? (
+                            <>
+                              <Image className="h-5 w-5 text-[#3B82F6] flex-shrink-0" />
+                              <img 
+                                src={fileUrl}
+                                alt={att.file_name}
+                                className="h-16 w-16 object-cover rounded cursor-pointer hover:opacity-80"
+                                onClick={() => window.open(fileUrl, '_blank')}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%2394A3B8" stroke-width="2"><rect x="3" y="3" width="18" height="18"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+                                }}
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <Mic className="h-5 w-5 text-[#3B82F6] flex-shrink-0" />
+                              <audio controls src={fileUrl} className="h-10 flex-1" />
+                            </>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-[#94A3B8] truncate">{att.file_name}</p>
+                            <p className="text-[10px] text-[#94A3B8]/60">
+                              {(att.file_size / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                          <a 
+                            href={fileUrl} 
+                            download={att.file_name}
+                            className="flex items-center gap-1 text-xs text-[#3B82F6] hover:text-[#06B6D4] flex-shrink-0"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            دانلود
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ─── تغییر وضعیت ─── */}
               {NEXT_STATUS[selectedReport.status] && (
                 <div>
                   <p className="mb-2 text-xs font-semibold text-[#94A3B8]">تغییر وضعیت:</p>
@@ -268,7 +349,7 @@ export default function MechanicRequests() {
                 </div>
               )}
 
-              {/* گفتگو */}
+              {/* ─── گفتگو ─── */}
               <div>
                 <h4 className="mb-3 text-sm font-bold text-white">گفتگو با کاربر</h4>
                 <div className="max-h-48 overflow-y-auto space-y-2 mb-3">
@@ -294,7 +375,7 @@ export default function MechanicRequests() {
                   )}
                 </div>
 
-                {/* فرم ارسال پاسخ */}
+                {/* ─── فرم ارسال پاسخ ─── */}
                 <div className="space-y-2">
                   <textarea value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="پاسخ خود را بنویسید..." rows={2}
